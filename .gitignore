@@ -1,4 +1,0 @@
-_build
-runtime/*.o
-.merlin
-/output/
