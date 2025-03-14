@@ -4,10 +4,11 @@ open S_exp
 open Shared
 open Error
 
-(** A [value] is the runtime value of an expression.  *)
+(** A [value]  is the runtime value of an expression. *)
 type value
   = Num of int
   | Bool of bool
+  | Pair of (value * value)
 
 type environment =
   value Symtab.symtab
@@ -19,17 +20,17 @@ let top_env : environment =
 
 (** [display_value v] returns a string representation of the runtime value
     [v]. *)
-let display_value : value -> string =
+let rec display_value : value -> string =
   fun v ->
     begin match v with
       | Num x ->
           sprintf "%d" x
 
       | Bool b ->
-          if b then
-            "true"
-          else
-            "false"
+          if b then "true" else "false"
+
+      | Pair (v1, v2) ->
+          sprintf "(pair %s %s)" (display_value v1) (display_value v2)
     end
 
 (** [interp_unary_primitive prim arg] tries to evaluate the primitive operation
@@ -62,6 +63,18 @@ let interp_unary_primitive : string -> value -> value option =
       | ("not", _) ->
           Some (Bool false)
 
+      | ("pair?", Pair _) ->
+          Some (Bool true)
+
+      | ("pair?", _) ->
+          Some (Bool false)
+
+      | ("left", Pair (v, _)) ->
+          Some v
+
+      | ("right", Pair (_, v)) ->
+          Some v
+
       | _ ->
           None
     end
@@ -85,12 +98,27 @@ let interp_binary_primitive : string -> value -> value -> value option =
       | ("<", Num x1, Num x2) ->
           Some (Bool (x1 < x2))
 
+      | ("pair", v1, v2) ->
+          Some (Pair (v1, v2))
+
       | _ ->
           None
     end
 
-(** [interp_expr e] tries to evaluate the s-expression [e], producing a
-    value. If [e] isn't a valid expression, it raises an error. *)
+(** [interp_trinary_primitive prim arg1 arg2 arg3] tries to evaluate the
+    primitive operation named by [prim] on the arguments [arg1], [arg2], and
+    [arg3]. If the operation is ill-typed, or if [prim] does not refer to a
+    valid primitive operation, it returns [None]. *)
+let interp_trinary_primitive :
+ string -> value -> value -> value -> value option =
+  fun prim arg1 arg2 arg3 ->
+    begin match (prim, arg1, arg2, arg3) with
+      | _ ->
+        None
+    end
+
+(** [interp_expr e] tries to evaluate the s_expression [e], producing a
+    value. If [e] isn't a valid expression, it raises an exception. *)
 let rec interp_expr : environment -> s_exp -> value =
   fun env e ->
     begin match e with
@@ -107,17 +135,24 @@ let rec interp_expr : environment -> s_exp -> value =
           end
 
       | Lst [Sym "let"; Lst [Lst [Sym var; exp]]; body] ->
-          let env =
-            env
-              |> Symtab.add var (interp_expr env exp)
+          let env' =
+            Symtab.add var (interp_expr env exp) env
           in
-          interp_expr env body
+          interp_expr env' body
 
       | Lst [Sym "if"; test_exp; then_exp; else_exp] ->
-          if interp_expr env test_exp <> Bool false then
-            interp_expr env then_exp
-          else
-            interp_expr env else_exp
+          begin match interp_expr env test_exp with
+            | Bool false ->
+                interp_expr env else_exp
+
+            | _ ->
+                interp_expr env then_exp
+          end
+
+      | Lst (Sym "do" :: exps) when List.length exps > 0 ->
+          exps
+            |> List.rev_map (interp_expr env)
+            |> List.hd
 
       | Lst [Sym f; arg] ->
           begin match interp_unary_primitive f (interp_expr env arg) with
@@ -142,11 +177,26 @@ let rec interp_expr : environment -> s_exp -> value =
                 raise (Stuck e)
           end
 
-      | _ ->
+      | Lst [Sym f; arg1; arg2; arg3] ->
+        begin match
+          interp_trinary_primitive
+            f
+            (interp_expr env arg1)
+            (interp_expr env arg2)
+            (interp_expr env arg3)
+        with
+          | Some v ->
+              v
+
+          | None ->
+              raise (Stuck e)
+        end
+
+      | e ->
           raise (Stuck e)
     end
 
-(** [interp e] evaluates the s-expression [e] using [interp_expr], then formats
+(** [interp e] evaluates the s_expression [e] using [interp_expr], then formats
     the result as a string. *)
 let interp : s_exp -> string =
   fun e ->

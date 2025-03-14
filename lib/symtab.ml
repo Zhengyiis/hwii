@@ -1,5 +1,3 @@
-open String
-
 module Symtab = Map.Make (struct
   type t = string
 

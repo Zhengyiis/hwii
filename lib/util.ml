@@ -16,13 +16,13 @@ let get_bindings (lst : s_exp list) : (string * s_exp) list =
       | Lst [Sym var; exp] ->
           (var, exp)
       | _ ->
-          raise (Error.Stuck e))
+          raise (Stuck e))
     lst
 
 let get_cases (lst : s_exp list) : (int * s_exp) list =
   List.map
     (fun (e : s_exp) ->
-      match e with Lst [Num n; exp] -> (n, exp) | _ -> raise (Error.Stuck e))
+      match e with Lst [Num n; exp] -> (n, exp) | _ -> raise (Stuck e))
     lst
 
 module List = struct
