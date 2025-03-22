@@ -1,57 +1,56 @@
-# Homework 4: Error Handling and the Heap
+# Homework 5: Fun with Files
 
 _**Note:** This is a 1-week assignment (due 1 week after release)._
 
 ## Introduction
 
-In this homework, you'll implement lists in two ways: first using pairs, then
-using arrays. You'll get practice handling runtime errors and dealing with data
-on the heap.
+In this homework, you'll implement string support and file handling. You'll get
+more practice dealing with data on the heap and learn how to extend your
+compiler's functionality via the C runtime.
 
 At the end of this homework assignment, your interpreter and compiler should
 support the following grammar (we've highlighted what you'll be adding):
 
+
 ```diff
-<expr>
-  ::= <num>
-    | <id>
-    | true
-    | false
-    | ()
-    | (<unary-prim> <expr>)
-    | (<binary-prim> <expr> <expr>)
-    | (<trinary-prim> <expr> <expr> <expr>)
-    | (if <expr> <expr> <expr>)
-    | (let ((<id> <expr>)) <expr>)
-    | (do <expr> <expr> ...)
-             
+<expr> ::= <num>
+         | <id>
++        | <string>
+         | true
+         | false
++        | stdin
++        | stdout
+         | (<z-prim>)
+         | (<un_prim> <expr>)
+         | (<bin_prim> <expr> <expr>)
+         | (if <expr> <expr> <expr>)
+         | (let ((<id> <expr>)) <expr>)
+         | (do <expr> <expr> ...)
 
-<unary-prim>
-  ::= add1
-    | sub1
-    | zero?
-    | num?
-    | not
-    | pair?
-    | left
-    | right
-+   | list?
-+   | vector?
-+   | vector-length
+<z-prim> ::= read-num | newline
 
+<un_prim> ::= add1
+            | sub1
+            | zero?
+            | num?
+            | not
+            | pair?
+            | left
+            | right
+            | print
++           | open-in
++           | open-out
++           | close-in
++           | close-out
 
-<binary-prim>
-  ::= +
-    | -
-    | =
-    | <
-    | pair
-+   | vector
-+   | vector-get
+<bin_prim> ::= +
+             | -
+             | =
+             | <
+             | pair
++            | input
++            | output
 
-
-<trinary-prim>
-+ ::= vector-set
 ```
 
 ## Testing
@@ -60,204 +59,226 @@ support the following grammar (we've highlighted what you'll be adding):
 
 _We will **NOT** be grading your tests for this homework._
 
-However, it will still be the case that when you submit your implementation to
-Gradescope (to the assignment `hw4`), your suite of examples in the `examples/`
+However, it will still be that case that when you submit your implementation to
+Gradescope (to the assignment `hw5`), your suite of examples in the `examples/`
 directory will be run against the reference interpreter and compiler. If the
 reference implementation fails on any of your examples, Gradescope will show you
-how its output differed from the expected output of your example if you provided
-one.
+how its output differed from the expected output of your example (if you wrote a
+`.out` file for it).
 
 You can do this as many times as you want. We encourage you to use this option
 to develop a good set of examples *before* you start working on your interpreter
 and compiler!
 
-### Running tests
+### Providing program input
 
-You can use `dune runtest -f` to run all your tests in the `examples/`
-directory. As before, the testing framework supports both `.lisp`/`.out` files
-and the `examples/examples.csv` file.
-
-## Some tips
-
-### Running the compiler and the interpreter manually
-
-In addition to using `dune runtest -f`, you can manually run the interpreter
-and compiler on input files.
-
-To run the interpreter on a file, execute the following command:
+Your programs can now read from standard input, using both the `read-num`
+operator defined in class and the `input` operator you'll write on this
+assignment. For testing, you should provide inputs by writing `.in` files for
+each `.lisp` file that expects an input. For example, if we defined a program
+like this in `examples/read-num.lisp`:
 
 ```
-dune exec bin/interp.exe -- <file.lisp>
+(print (pair (read-num) (pair (read-num) (read-num))))
 ```
 
-To run the compiler on a file, execute the following command:
+We could define its input in `examples/read-num.in`:
 
 ```
-dune exec bin/compile.exe -- <file.lisp> output
+8
+13
+21
 ```
 
-The resulting `.s` file (containing assembly code) and `.exe` file (an
-executable) will be in the `output/` directory. You can then run the executable
-with:
+The testing system will provide this as the input to both the interpreter and
+the compiler.
 
-```
-./output/<file.lisp>.exe
-```
+Additionally, the testing framework handles rows in `examples/examples.csv` of
+the form
 
-You can also tell the compiler to run the executable immediately after compiling
-by adding `-r`, e.g.:
-
-```
-dune exec bin/compile.exe -- <file.lisp> output -r
+```csv
+<PROGRAM>,<INPUT1>,<OUTPUT1>,<INPUT2>,<OUTPUT2>,...
 ```
 
-### Inspecting and debugging assembly
+For instance, to test a program that echoes single characters read from `stdin`
+to `stdout`, you could write:
 
-If you run the compiler on a `.lisp` file (as described above), you can take a
-look at the emitted assembly by looking in the `.s` file in the `output`
-directory. This is a really useful way to understand how your compiler is
-working as a whole and to debug any issues you may be facing.
-
-You can also take a look at `_build/default/test/test_output/*.s` to take a look
-at the assembly for your test cases, including those in `examples/examples.csv`.
-
-For a more interactive way to debug assembly, check out
-Section 4 on the course website!
-
-### Manually assembling `.s` files
-
-If it ever happens that the assembly emitted by your compiler is invalid and
-you're not sure why, you can try manually compiling a test file (see above),
-then manually running `nasm` on the `.s` file in the `output` directory:
-
-```bash
-nasm <input-filename>.s -o <output-filename>.o -f elf64
+```csv
+(output stdout (input stdin 1)), a, a, b, b
 ```
 
-This may give you more helpful error messages than the automated testing
-infrastructure.
+### The scratch directory
 
-## 1. Lists (5 subtasks)
+When testing reading/writing to files, it can be easy for state to get mixed up
+between tests (e.g. one test creates a file and writes some things to it, while
+the test that runs after it expects the file not to exist).
 
-As we saw in class, lists can be implemented using pairs. In fact, this is how
-lists are generally implemented in Scheme and other Lisp-like languages. A list
-is either:
+Therefore, we've set this homework up such that when you run `dune runtest -f`,
+your code will run in a directory that contains a subdirectory called `tmp`.
+(As an example path, you could have some tests that read and write to the path
+`tmp/hello.txt`.) Reading and writing files from `tmp` directory will work both
+locally and on Gradescope.
 
-- The empty list, for which we used `false` in class.
-- A pair where the second element is a list.
+This is a great place to read/write files in your tests, but **please do not
+store anything important in this directory---it WILL get erased on each test
+run!** (As a consequence, you will likely not be able to see the actual files
+that get created and accessed when you use the testing framework.)
 
-Instead of using `false` to signal the empty list, Scheme includes a special
-value `()` (pronounced "nil").
+If you want to see the files that your program reads from and writes to, we
+recommend running your program manually in the same manner as previous
+homeworks (i.e., using `dune exec`). Since your tests will likely be writing
+from paths like `tmp/hello.txt`, we recommend creating a `tmp` folder in
+whatever directory you run your code manually from.
 
-**Task 1.1:** Add support for `()` to the interpreter.
 
-**Task 1.2:** Add support for `()` to the compiler. Use `0b11111111` as the
-runtime representation of `()`.
+## 1. Strings (4 subtasks)
 
-_Hint:_ You'll need to modify the runtime to properly display nil values.
+In this task, you will implement support for strings. For now, this just means
+adding support for string literals (i.e., s-expressions built with the `Str`
+constructor). Here are some pointers:
 
-Now we can build lists using `pair` and `()`. Here are a few such lists:
+- String literals are sequences of characters enclosed in double-quotes. Strings
+  should be displayed in the same double-quote-enclosed representation.
+- Strings may contain characters with special meaning (namely, newlines and
+  double-quotes). When displaying strings, these should be escaped as `\n` and
+  `\"` to ensure the resulting expression is well-formed. For instance, a string
+  containing only a double-quote should be displayed as `"\""` and not `"""`.
+  You do *not* need to support special characters besides quote and newline.
 
-- `()`
-- `(pair 1 ())`
-- `(pair 1 (pair 2 ()))`
-- `(pair (pair 1 2) ())`
+**Task 1.1 (ungraded):** Write tests for strings in the `examples/` directory.
 
-We can now define a primitive `(list? e)` that evaluates to `true` when its
-argument is a list and `false` otherwise.
+**Task 1.2:** Add support for strings to the interpreter.
 
-**Task 1.3 (ungraded):** Write tests for the `list?` primitive in the
-`examples/` directory.
+_Hint:_ Add a constructor to `value` and extend the interpreter's
+`display_value` function to display strings (use `String.escaped` to escape
+special characters).
 
-**Task 1.4:** Add support for `list?` to the interpreter.
+**Task 1.3:** Add support for strings to the compiler. We'll represent strings
+like C does: `NUL`-terminated sequences of characters. The runtime value for a
+string should be a pointer to the first character of the sequence tagged with
+`0b011`.
 
-_Hint:_ You can use a recursive helper function to implement `list?` in the
-interpreter.
+_Hint:_ Since we're only concerned with string literals for now, you can
+implement string support using `DqString`, which will embed a string literal
+into the compiled program as data. As with `DqLabel`, you should be sure that
+program execution never runs this directive---it's just data, not instructions.
 
-**Task 1.5:** Add support for `list?` to the compiler.
+_Hint:_ String literals embedded in this way must be placed at 8-byte aligned
+addresses, since you will need to tag the pointers with `0b011`. You can use
+the `Align` directive to ensure the next directive will be aligned properly.
 
-_Hint:_ You can generate a loop to execute this primitive; to do so, you'll need
-to define a label and repeatedly jump back to that label.
+_Hint:_ The ASCII character `NUL` has ASCII value `0` and is written in C as
+`\0`. The code we provide for you in `./asm/directive.ml` automatically adds
+the `NUL` terminator to the argument of `DqString` when writing to an assembly
+file.
 
-## 2. Vectors (3 subtasks)
+**Task 1.4:** Extend the runtime with support for displaying strings. In order
+to properly escape newlines and double-quotes, implement this as a loop over the
+string's characters, and check if each needs to be escaped.
 
-We can also implement lists using arrays. In Scheme, array-backed lists are
-called _vectors_. In this task, you'll implement the following five vector
-primitives:
+## 2. File I/O using channels (6 subtasks)
 
-- `(vector n e)`, which creates a vector of length `n` where all of the elements
-  are `e`.
-    - **Precondition:** `n` evaluates to a positive integer.
-- `(vector? e)` returns `true` if `e` is a vector and `false` otherwise.
-    - **Precondition:** none.
-- `(vector-length v)` returns the length of the vector `v`.
-    - **Precondition:** `v` is a vector.
-- `(vector-get v n)` returns the element of the vector `v` at (0-based) index
-  `n`.
-    - **Precondition:** `v` is a vector and `n` evaluatase to a non-negative
-      integer less than the length of `v`.
-- `(vector-set v n e)` sets the element at index `n` of the vector `v` to `e`
-  and evaluates to the vector.
-    - **Precondition:** `v` is a vector and `n` evaluates to a non-negative
-      integer less than the length of `v`.
+Next you will add a miniature version of OCaml's channel-based I/O to your
+language.
 
-### An important note about error handling
+### Channels
 
-For this assignment, unlike previous assignments, **you are expected to
-implement error-handling in the compiler.**
+First, you'll need to add support for channel types. Here are some pointers:
 
-An expression that does not meet its corresponding precondition **must** result
-in a runtime error. (This is sometimes what is meant by a language being
-"safe.") Here's what your code should do when evaluating an expression that does
-not meet its precondition:
+- Channels can be either input channels or output channels. Input channels can
+  be read from, and output channels can be written to. 
 
-- _In the interpreter_, you must throw an exception. Any exception will do; we
-    will not check the exception type nor its contents.
+- The symbols `stdin` and `stdout` refer to the program's input and output.
+  `stdin` is an input channel, and `stdout` is an output channel.
 
-- _In the compiler_, you must jump to the `lisp_error` symbol, defined in
-  `lib/runtime/runtime.c`. Take a look at `ensure_num` and `ensure_pair` for
-  some examples of the error handling we've implemented so far.
+- Channels should be printed as `<in-channel>` or `<out-channel>`.
 
-  _Hint:_ C functions assume their first argument is stored in the register
-  `Rdi`, and the `dq` directive lets you embed bytes into the location in memory
-  where the instruction is stored.
+**Task 2.1 (ungraded):** Write tests for channels in the `examples/` directory.
 
-### Displaying vector outputs
+**Task 2.2:** In the interpreter, implement input and output channels with the
+built-in OCaml types `in_channel` and `out_channel`. In the top-level
+environment, the symbols `stdin` and `stdout` should be initialized to
+`!input_channel` and `!output_channel`, respectively (this is necessary to make
+tests work).
 
-Vectors should be displayed as space-delimited lists of their values enclosed
-in square brackets. For instance, here are some simple vectors of
-numbers:
+**Task 2.3:** In the compiler, implement both types of channels with the same
+mask, `0b111111111`. Input channels should have tag `0b011111111`, and output
+channels should have tag `0b001111111`. `stdin` should be represented at runtime
+as `0` shifted left and tagged with the input-channel tag; `stdout` should be
+represented as `1` shifted left and tagged with the output channel tag. You will
+also need to update the runtime to accommodate this addition.
 
-- `[1]`
-- `[1 2 3]`
+### File I/O
 
-Note that this syntax is not supported in our grammar, so you cannot use `[1 1]`
-as shorthand for `(vector 2 1)`, for example.
+Now you will implement some primitive I/O operations to open, close, read from,
+and write to channels:
 
-**Task 2.1 (ungraded):** Write tests for the five vector primitives in the
-`examples/` directory.
+- `(open-in filename)` takes in a string representing a filename and opens it
+  as an input channel, returning the channel. You do not need to handle the
+  case in which the file named by `filename` does not exist.
+- `(open-out filename)` takes in a string representing a filename and opens it
+  as an output channel, returning the channel.
+- `(close-in ch)` takes in an input channel and closes it, returning `true`.
+- `(close-out ch)` takes in an output channel and closes it, returning `true`.
+- `(input ch n)` reads `n` bytes from the input channel `ch`, returning a string
+  of those bytes with a `NUL` terminator appended at the end. This primitive
+  should fail if `n < 0`.  We will not test on cases where `n >` the size of the input.
+- `(output ch s)` writes the string `s` with a `NUL` terminator appended at the
+  end to the output channel `ch`, returning `true`.
 
-### Implementing vectors
+Closing `stdin` or `stdout` is undefined behavior.
 
-**Task 2.2:** Add support for vectors and the five vector primitives to the
-interpreter.  In the interpreter, you should implement vectors using OCaml's
-built-in `array` type and the functions in the `Array` module.
+**Task 2.4 (ungraded):** Write tests for the six I/O primitives in the `examples/`
+directory.
 
-**Task 2.3:** Add support for vectors and the five vector primitives to the
-compiler.  In the compiler, you should implement vectors on the heap: A vector
-of length `n` should occupy `n+1` 8-byte cells, where the first cell should be
-used to store its length. Use the three-bit tag `0b101` for vector values.
+**Task 2.5:** Implement the six I/O primitives in the interpreter.
 
-_Hint:_ In `compile.ml`, look at where we call `compile_binary_primitive` to see that the second argument is held in `Rax`, and the first is on the stack.  See where we call `compile_trinary_primitive` to see where we store arguments for primitives that accept three arguments.
+_Hint:_ Here are some tips for implementing each primitive in the interpreter.
+Each of the functions below is defined in the
+[OCaml `Stdlib` module](https://ocaml.org/api/Stdlib.html).
 
-_Hint:_ You may need to make use of an additional register in order to implement
-some of the vector primitives. If you do, you can use `R9` in addition to the
-usual `Rax` and `R8`.
+- `open-in` should be implemented using `open_in`.
+- `open-out` should be implemented using `open_out`.
+- `close-in` should be implemented using `close_in`.
+- `close-out` should be implemented using `close_out`.
+- `input` should be implemented using `really_input` (you can use something like
+  `Bytes.make n '\000'` to create a buffer of the appropriate size).
+- `output` should be implemented using `output_string`.
 
-_Hint:_ You'll need to modify the runtime to properly display vector values.
-In order to do so, it will likely be helpful to cast a vector's pointer to the
-heap into a C pointer to a `uint64_t` and then use
-[pointer arithmetic](https://www.tutorialspoint.com/cprogramming/c_pointer_arithmetic.htm)
-to access each of the values in the vector.  Recall how we handled pairs in class.
+**Task 2.6:** Implement the six I/O primitives in the compiler. All of these
+operations will be implemented with C functions that you add to the runtime. You
+should define a C function for each operation (except for `close-in` and
+`close-out`, which should be implemented identically in the runtime and can use
+the same C function). **Like Homework 4, the assembly that your compiler
+generates is required to do error checking; this means that if one of the
+primitive I/O operations is applied to an argument of an unexpected type, the
+program should jump to the `lisp_error` function in C.**
 
-We will not test on vectors over size 100, and we will not test display of cyclic vectors.
+_Hint:_ C functions assume their first argument is stored in the register
+`Rdi`, their second argument is stored in the register `Rsi`, and their third
+argument is stored in the register `Rdx`.
+
+_Hint:_ Here are some tips for implementing each primitive in the runtime:
+
+- Your functions for `open-in` and `open-out` should use the `open_for_reading`
+  and `open_for_writing` helper functions we have provided in `runtime.c`. Both
+  functions return a file descriptor as an integer. Turn this file descriptor
+  into a channel by shifting it and tagging it with the correct channel tag.
+- Your function for `close-in` and `close-out` should use the `close` C
+  function, passing in the file descriptor obtained from `open`. Input and
+  output channels can be handled exactly the same.
+- Your function for `input` should use the `read_all` helper function we've
+  provided in `runtime.c`; this helper function takes care of reading the
+  correct number of bytes, adding a `NUL` terminator, and handling errors. Here
+  are some tips:
+    - `read_all` reads into a buffer, so you'll need to pass in a pointer to the
+      Lisp heap (which means you'll have to pass the heap pointer as an argument
+      to your function).
+    - After you call `read_all` you'll need to adjust your heap pointer to make
+      sure that subsequent allocations don't overwrite this string.
+    - You'll also need to make sure that the heap pointer remains a multiple 
+      of 8. We recommend doing this by returning the heap adjustment from your C
+      function as an integer (taking care to make sure it's a multiple of 8),
+      but there are other ways of doing it.
+- `output` should be implemented using the `write_all` helper function provided
+  in `runtime.c`.
