@@ -122,30 +122,7 @@ int64_t close_out_channel(int64_t channel) {
 }
 
 int64_t input_channel(int64_t channel, int64_t n, void* heap) {
-  // Check if it's an input channel
-  if ((channel & inchannel_mask) != inchannel_tag) {
-      printf("Input error: not an input channel\n");
-      exit(1);
-  }
   
-  // Check if n is a valid number
-  if ((n & num_mask) != num_tag) {
-      printf("Input error: invalid length\n");
-      exit(1);
-  }
-
-  int fd = (channel & ~inchannel_mask) >> 9;
-  int bytes_to_read = n >> num_shift;
-
-  // Ensure heap is 8-byte aligned
-  uintptr_t aligned_heap = (uintptr_t)heap;
-  if (aligned_heap % 8 != 0) {
-      aligned_heap += (8 - (aligned_heap % 8));
-  }
-
-  read_all(fd, (char*)aligned_heap, bytes_to_read);
-  
-  return ((int64_t)aligned_heap | string_tag);
 }
 
 int64_t output_channel(int64_t channel, int64_t str) {
