@@ -5,6 +5,9 @@
 #include <string.h>
 #include <fcntl.h>
 
+#define STDIN_FD 0
+#define STDOUT_FD 1
+
 /* [read_all(fd, buf, n)] reads exactly [n] bytes of data from the file
  * descriptor [fd] into [buf], then adds a null byte at the end. Prints an
  * error and exits if there is a problem with a read (for instance, if the file
@@ -70,8 +73,7 @@ int open_for_writing(char *filename) {
   return fd;
 }
 
-
-extern uint64_t lisp_entry(void *heap);
+extern void lisp_entry(void *heap);
 
 #define num_mask   0b11
 #define num_tag    0b00
@@ -83,6 +85,89 @@ extern uint64_t lisp_entry(void *heap);
 
 #define heap_mask 0b111
 #define pair_tag 0b010
+
+#define string_mask 0b111
+#define string_tag 0b011
+
+#define inchannel_mask 0b111111111
+#define inchannel_tag 0b011111111
+#define outchannel_mask 0b111111111
+#define outchannel_tag 0b001111111
+#define inchannel_shift 9
+#define outchannel_shift 9
+
+// Channel operations
+int64_t open_in_channel(char* filename) {
+  int fd = open_for_reading(filename);
+  if (fd < 0) return -1;
+  return ((int64_t)fd << 9) | 0b011111111;
+}
+
+int64_t open_out_channel(char* filename) {
+  int fd = open_for_writing(filename);
+  if (fd < 0) return -1;
+  return ((int64_t)fd << 9) | 0b001111111;
+}
+
+int64_t close_in_channel(int64_t channel) {
+  int fd = channel >> 9;
+  close(fd);
+  return 1;
+}
+
+int64_t close_out_channel(int64_t channel) {
+  int fd = channel >> 9;
+  close(fd);
+  return 1;
+}
+
+int64_t input_channel(int64_t channel, int64_t n, void* heap) {
+  // Check if it's an input channel
+  if ((channel & inchannel_mask) != inchannel_tag) {
+      printf("Input error: not an input channel\n");
+      exit(1);
+  }
+  
+  // Check if n is a valid number
+  if ((n & num_mask) != num_tag) {
+      printf("Input error: invalid length\n");
+      exit(1);
+  }
+
+  int fd = (channel & ~inchannel_mask) >> 9;
+  int bytes_to_read = n >> num_shift;
+
+  // Ensure heap is 8-byte aligned
+  uintptr_t aligned_heap = (uintptr_t)heap;
+  if (aligned_heap % 8 != 0) {
+      aligned_heap += (8 - (aligned_heap % 8));
+  }
+
+  read_all(fd, (char*)aligned_heap, bytes_to_read);
+  
+  return ((int64_t)aligned_heap | string_tag);
+}
+
+int64_t output_channel(int64_t channel, int64_t str) {
+  // Check if it's an output channel
+  if ((channel & outchannel_mask) != outchannel_tag) {
+      printf("Output error: not an output channel\n");
+      exit(1);
+  }
+
+  // Check if str is a string
+  if ((str & string_mask) != string_tag) {
+      printf("Output error: not a string\n");
+      exit(1);
+  }
+
+  int fd = (channel & ~outchannel_mask) >> 9;
+  char* string_ptr = (char*)(str - string_tag);
+  
+  write_all(fd, string_ptr);
+  
+  return (1LL << bool_shift) | bool_tag;
+}
 
 void print_value(uint64_t value) {
   if ((value & num_mask) == num_tag) {
@@ -103,10 +188,29 @@ void print_value(uint64_t value) {
     printf(" ");
     print_value(v2);
     printf(")");
-  } else {
-    printf("BAD VALUE: %" PRIu64, value);
-  }
+  } else if ((value & string_mask) == string_tag) {
+    char *str = (char *)(value - string_tag);
+    printf("\"");  // Print opening quote
+    while (*str != '\0') {
+      switch (*str) {
+        case '"':
+            printf("\\\"");
+            break;
+        case '\n':
+            printf("\\n");
+            break;
+        default:
+            putchar(*str);
+    }
+        str++;
+    }
+    printf("\"");  // Print closing quote
 }
+else if ((value & inchannel_mask) == inchannel_tag) {
+  printf("<in-channel>");
+} else if ((value & outchannel_mask) == outchannel_tag) {
+  printf("<out-channel>");
+}}
 
 void lisp_error(char *exp) {
   printf("Stuck[%s]", exp);
