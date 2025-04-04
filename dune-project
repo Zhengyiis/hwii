@@ -1,3 +1,3 @@
 (lang dune 2.7)
-(name hw5)
+(name hw6)
 (using menhir 2.1)
