@@ -1,0 +1,15 @@
+function sorted_insert(n,xs)=
+if is_empty(xs) then pair(n,xs) else 
+let head=Left(xs) in 
+let tail=Right xs  in 
+if n<head then pair(n,head) else pair(head,sorted_insert(n,tail))
+
+function sort(xs)=
+if is_empty(xs) then nil else
+let head=left(xs) in
+let tail=right(xs) in 
+sorted_insert(head,sort(tail))
+
+let test=pair(1,pair(3,pair(2,pair(5,pair(4,nil))))) in
+let x=sort(test) in
+print(x)

@@ -1,240 +1,229 @@
-# Homework 6: `apply` and Variadic Functions
+# Homework 7: Parsing
 
-In this homework, you'll extend the function calls we developed in class with
-two additional features:
+In this homework, you'll implement a top-down predictive parser for an
+alternative syntax for our language. This syntax is called ML (Berkeley),
+because it bears a vague resemblance to ML-family languages like OCaml.
+We'll usually refer to it as MLB.
 
--  **The `apply` operation**, which takes in the name of a function and a list
-   of arguments and calls the functions on those arguments. Lists are defined as
-   in Homework 4: either nil (i.e., `()`) or a pair where there second element
-   is a list. Thus, we may use `apply` as follows:
+Here's an example of an MLB program:
 
-   ```
-   (define (f x y) (+ x y))
-   (print (apply f (pair 1 (pair 2 ()))))
-   ```
+```
+function add_up(a, b, c) =
+  a + b = c
 
-   The above program should print `3`.
+let x = 
+  if 
+    add_up(read_num(), read_num(), read_num())
+  then 1
+  else 2 
+in
+print(x)
+```
 
--  **Variadic functions**, which can take additional arguments beyond those
-   given static names. The additional arguments are put into a list that the
-   function can access. Here's an example of a program with a variadic function:
- 
-   ```
-   (define (f x xs ...) (pair x xs))
-   (print (f 1 2 3 4))
-   ```
+Unlike the previous assignments, **you won't be modifying either the interpreter
+or the compiler.** We've provided an AST-based version of the HW6 compiler and
+interpreter as well as functions to produce the AST from s-expressions. You'll
+write a parser that produces the *same* AST but that instead reads in
+MLB-formatted source code.
 
-   The above program should print `(pair 1 (pair 2 (pair 3 (pair 4 ()))))`.
+Here's a grammar (like the ones we discussed in class) for MLB:
 
-A function's *arity* is the number of arguments it takes. (Accordingly, variadic
-functions are also called "variable-arity" functions.) In class, we implemented
-static arity checking: since we know at compile-time how many arguments we're
-passing when calling a function, we can throw a compile-time error when the
-number of arguments doesn't match the function's arity.  However, in order to
-correctly implement `apply`, we'll need to switch to *dynamic* arity checking,
-checking the number of arguments at runtime.
+```
+<program> ::= <defns> <expr>
 
-At the end of this homework assignment, your interpreter and compiler should
-support the following grammar (we've highlighted what you'll be adding):
+<defns> ::=
+  | epsilon
+  | <defn> <defns>
 
-```diff
-<program>
-  ::= <defn> ... <expr>
+<defn> ::=
+  | FUNCTION ID LPAREN <params> EQ <expr>
 
-<defn>
-  ::= (define (<id> <id> ...) <expr>)
-+   | (define (<id> <id> ... <id> "...") <expr>)
+<params> ::=
+  | RPAREN
+  | ID <rest-params>
 
-<expr>
-  ::= <num>
-    | <id>
-    | true
-    | false
-    | ()
-    | (<z-prim>)
-    | (<unary-prim> <expr>)
-    | (<binary-prim> <expr> <expr>)
-    | (<id> <expr> ...)
-+   | (apply <id> <expr>)
-    | (if <expr> <expr> <expr>)
-    | (let ((<id> <expr>)) <expr>)
-    | (do <expr> <expr> ...)
+<rest-params> ::=
+  | RPAREN
+  | COMMA ID <rest-params>
 
-<z-prim>
-  ::= read-num
-    | newline
+<expr> ::=
+  | IF <expr> THEN <expr> ELSE <expr>
+  | LET ID EQ <expr> IN <expr>
+  | <seq>
 
-<unary-prim>
-  ::= add1
-    | sub1
-    | zero?
-    | num?
-    | not
-    | pair?
-    | empty?
-    | left
-    | right
-    | print
+<seq> ::=
+  | <infix1> <rest-seq>
 
-<binary-prim>
-  ::= +
-    | -
-    | =
-    | <
-    | pair
+<rest-seq> ::=
+  | epsilon
+  | SEMICOLON <infix1> <rest-seq>
 
+<infix1> ::=
+  | <infix2> <infix1'>
+
+<infix1'> ::=
+  | epsilon
+  | EQ <infix1>
+  | LT <infix1>
+
+<infix2> ::=
+  | <term> <infix2'>
+
+<infix2'> ::=
+  | epsilon
+  | PLUS <infix2>
+  | MINUS <infix2>
+
+<term> ::=
+  | ID
+  | ID LPAREN <args>
+  | NUM
+  | LPAREN <expr> RPAREN
+
+<args> ::=
+  | RPAREN
+  | <expr> <rest-args>
+
+<rest-args> ::=
+  | RPAREN
+  | COMMA <expr> <rest-args>
 ```
 
 ## Testing
 
 ### Tests will not be graded
 
-_We will **NOT** be grading your tests for this homework._
+_Except for the specific example we require in Task 1.1, we will **NOT** be
+grading your tests for this homework._
 
 However, it will still be that case that when you submit your implementation to
-Gradescope (to the assignment `hw6`), your suite of examples in the `examples/`
+Gradescope (to the assignment `hw7`), your suite of examples in the `examples/`
 directory will be run against the reference interpreter and compiler. If the
 reference implementation fails on any of your examples, Gradescope will show you
 how its output differed from the expected output of your example (if you wrote a
 `.out` file for it).
 
 You can do this as many times as you want. We encourage you to use this option
-to develop a good set of examples *before* you start working on your interpreter
-and compiler!
+to develop a good set of examples *before* you start working on your parser!
 
-### Evaluating a list of s-expressions
+### Support for `.mlb` files
 
-The testing framework now supports evaluating multiple expressions where all but
-the last expression is a definition, as per the grammar above.
+We've extended the testing framework to support programs in the new syntax. You
+can write MLB-syntax examples either by:
 
-For example, you could make a file `examples/test.lisp` consisting of the
-following content:
-```
-(define (f x y) (+ x y))
-(print (apply f (pair 1 (pair 2 ()))))
-```
-The corresponding valid `examples/test.out` file would then consist of the
-following content:
-```
-3
-```
+- Putting `.mlb` files in the `examples` directory
+- Writing a _tab_-separated `examples/mlb-examples.tsv` file. This file is
+  tab-separated instead of comma-separated because, unlike our Lisp-like syntax,
+  MLB uses commas pretty extensively.
 
-You can also use multiple expressions in the `examples/examples.csv` file. The
-above example would be encoded as a row in this file as follows:
-```
-(define (f x y) (+ x y)) (print (apply f (pair 1 (pair 2 ())))), 3
-```
+Note that in general, the interpreter and the compiler will give the same result
+on all of your programs! You'll probably want to write `.out` files (or include
+expected output in the `.tsv` file) to make sure your parser is actually
+working. These work exactly the same as with `.lisp` files.
 
-## General advice
-
-### Starter code
-
-The starting language for this assignment includes nil (`()`) from Homework 4.
-It also includes a unary operator `empty?` that returns `true` if its argument
-is `()` and `false` otherwise.
-
-### Implementing the compiler
-
-You will need to implement some of the new functionality in this homework by
-writing somewhat larger functions using x86 assembly directives in the compiler.
-Here are some tips for doing so:
-
-- The `R8`, `R9`, `R10`, and `R11` registers are all available to store
-  temporary data.
-- It may be helpful to write `(* OCaml comments *)` in your list of assembly
-  directives that describe, at a high level, what the assembly is doing.
-
-## 1. `apply` (4 subtasks)
-
-**Task 1.1 (ungraded):** Write tests for the `apply` operation in the
-`examples/` directory.
-
-**Task 1.2:** Implement `apply` in the interpreter, including dynamic arity
-checking. You should do so by evaluating its second argument, then traversing
-the list and adding each element to the environment with the corresponding
-argument name. **You should raise a runtime exception (of any kind) in the
-following cases:**
-- The second argument is not a list.
-- The second argument is a list but does not contain the right number of
-  arguments for the function being applied. (This is the "dynamic arity check"
-  for the interpreter.)
-
-**Task 1.3:** Implement `apply` in the compiler, NOT including the dynamic arity
-check. You should do so by traversing its second argument, adding each to the
-stack where the function arguments would go. **You should jump to the C function
-`lisp_error` if the second argument is not a list.**
-
-Now that we have `apply`, we can't guarantee at compile-time that a function
-will be called with the right number of arguments. So, we'll need to modify our
-functions to check this. To do this, functions should take an additional first
-"argument" on the stack which represents the number of actual arguments passed
-in. Each function is then responsible for making sure that this value is equal
-to the number of arguments it expects.
-
-**Task 1.4:** Implement dynamic arity checking for `apply` in the compiler by
-modifying the code for `apply` and regular function calls to pass in this extra
-"argument." Since you're doing this, you can now remove the static error
-checking from regular function calls.
-
-## 2. Variadic functions (3 subtasks)
-
-Variadic functions in our language look like this:
+On this homework more than on previous ones, it may be useful to run your
+functions in an OCaml shell. You can do that by running `dune utop` from the
+`hw7` directory, then entering, for example:
 
 ```
-(define (add args ...)
-  (if (empty? args)
-    0
-    (+ (left args) (apply add (right args)))))
+> open Mlb_syntax;;
+> parse "1 + 3";;
 ```
 
-The `...` (which corresponds to the `Dots` constructor of our `s_exp` type)
-indicates that the function is variadic. The last named parameter (called the
-"rest" parameter) gets a list of all of the "extra" arguments passed
-in.
+## 1. Writing an MLB program (1 subtask)
 
-Consider the following program:
+To start, complete the following task to familiarize yourself with the MLB
+syntax. _Note that this task WILL be graded!_
 
+**Task 1.1:** In the file `examples/task1.mlb`, write a valid program in the MLB
+syntax that defines a `sort` function that sorts a list of integers.
+
+_Hint:_ Recall that we represent lists as nested `pair`s with a `nil` at the
+end. For example, the list `[1, 2]` would be written as `pair(1, pair(2, nil))`
+in the MLB syntax.
+
+_Hint:_ It may be helpful to define a `sorted_insert` helper function that takes
+in an integer `n` and a sorted list `xs` and returns `xs` with `n` inserted into
+it at a location that maintains the sorted order.
+
+## 2. Parsing MLB syntax (1 subtask)
+
+Now that you are familiar with MLB syntax, it's time to write a parser for the
+language!
+
+We provide you with a tokenizer in `mlb_syntax/tokenizer.ml`; it should not be
+necessary to change it, but you are free to do so if you wish. Instead, you'll
+be working on the parser in the file `mlb_syntax/parser.ml`.
+
+The AST you'll produce is defined in `ast/ast.ml`; it's quite similar to the AST
+we defined in class. A few hints for mapping the MLB grammar to the AST:
+
+- The `<seq>` non-terminal should correspond to `Do` if and only if you end up
+  parsing more than one semicolon-separated expression.
+- The `<infix1>` and `<infix2>` non-terminals can produce `Eq`, `Lt`, `Plus`,
+  and `Minus` primitive calls.
+- The first `ID` case in the `<term>` non-terminal should produce `True` on the
+  identifier `true`, `False` on the identifier `false`, `Nil` on the identifier
+  `nil`, and `Var id` on other identifiers.
+- The second `ID` case in the `<term>` non-terminal should produce either `Call`
+  or a primitive. You can use the provided `call_or_prim` function to decide
+  which one to produce.
+
+**Task 2.1:** In the file `mlb_syntax/parser.ml`, finish the implementation of
+the `parse` function by implementing `parse_defns` and `parse_expr`, which parse
+MLB definitions and expressions respectively.
+
+_Hint:_ We recommend writing a top-down parser like the ones we developed in
+class:
+
+- Write one function per non-terminal (with the exception of primed cases---for
+  instance, you can handle `infix1'` inside the function for `infix1`).
+- Return a value (usually, but not always, an expression) and a list of tokens
+  from each function.
+- Decide which production rule to use by examining the front of the token list.
+
+You may wish to review `handparser.ml` and `handparser2.ml` from class, along
+with the class sessions covering how they work.  Make sure you remember how
+you're using the returned token list!
+
+_Hint:_ The MLB grammar does not have any left-recursion or left-ambiguity
+except for in `<term>`, where you can handle the two `ID` cases with careful
+pattern matching.
+
+_Hint_: You shouldn't need to change the top-level `parse_program` function, but
+you'll need to fill in the bodies of `parse_defns` and `parse_expr` and add
+additional non-terminal parsing functions.
+
+_Hint:_ We've provided one other helper function: `consume_token`. This function
+checks to see that the head of a token list is what you want it to be, returning
+the tail of the list if it is and raising an error otherwise.
+
+## Extra credit: associativity (1 extra credit subtask worth 10%)
+
+With the grammar specified above, the MLB expression
+`2 + 3 + 4`
+will parse to something like (in s-expression syntax)
+`(+ 2 (+ 3 4)`.
+
+This is a little different from what we'd usually expect: addition is generally
+defined to left-associative. Most languages parse that same expression to
+`(+ (+ 2 3) 4)`.
+
+For addition, this doesn't really matter---since it's associative, those
+expressions evaluate to the same thing. This can lead to weird behavior on
+subtraction, though. The expression
 ```
-(define (f a b c ...) (pair a (pair b c)))
-(f 1 2 3 4 5)
+10 - 3 - 2
 ```
+should probably evaluate to `5`, but if you implement the grammar as specified
+above it will instead evaluate to `9` (i.e., `10 - (3 - 2)`).
 
-When `f`'s body is executed, `a` is `1`, `b` is `2`, and `c` is
-`(pair 3 (pair 4 (pair 5 ())))` (i.e., a list containing 3, 4, and 5).
+**Extra Credit Task:** If you finish your parser early, try to fix this!
+Specifically, modify your parser so that `+` and `-` associate to the left.
 
-If a variadic function has `N` regular parameters in addition to the rest
-parameter, it is an error to call it with less than `N` arguments. If it is
-called with exactly `N` arguments, the rest parameter will be bound to the empty
-list.
+_Hint:_ There's more than one way to achieve this! One way to get started would
+be to take a look at the `<seq>` and `<rest-seq>` non-terminals, which are used
+to get a list of expressions. Could you do something similar to get a list of
+terms, then transform the list into an AST of the correct shape?
 
-**Task 2.1 (ungraded):** Write tests for variadic functions in the `examples/`
-directory.
-
-We have extended the `defn` type shown in class with an extra `rest` field,
-which is a `string option`. This field will be `None` for non-variadic
-functions. For variadic functions, it will be `Some "<name of rest
-parameter>"`. The `defns_and_body` helper function has been extended to support
-variadic functions.
-
-**Task 2.2:** Add support for variadic functions to the interpreter. Do this by
-adding a binding to the environment for the rest parameter.
-
-_Hint:_ You'll need to convert an OCaml list of arguments to a Lisp list.
-
-**Task 2.3:** Add support for variadic functions to the compiler.
-
-_Hint:_ Here are some pointers for adding variadic functions to the compiler:
-
--  We recommend calling variadic functions just like regular functions:
-   push all of the arguments onto the stack. In other words, the code to call a
-   function shouldn't need to change to support variadic functions.
--  Once a variadic function is called, it should take care of copying any extra
-   arguments from the stack to a freshly-allocated list. You should have already
-   implemented dynamic arity checking in **Task 1.4**, so you'll be able to tell
-   how many of these extra arguments there are.
--  Once these arguments have been copied from the stack into a list, put a
-   pointer to this list (tagged as usual) onto the stack as the `N+1`-th
-   argument; the rest parameter should point at this index in the symbol table.
-
-_Hint:_ You may find the `Symtab.cardinal` function helpful; it returns the
-number of bindings in a symbol table.
+_This task is worth 10% additional credit on this homework assignment._

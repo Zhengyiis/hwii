@@ -24,7 +24,7 @@ rule token = parse
     { CHARACTER '\n' }
 | "#\\space"
     { CHARACTER ' ' }
-| ['"']+([^ '"' '\\'] | '\\'+_)*+['"'] as s
+| '"' ([^ '"' '\\'] | '\\' _)* '"' as s
     { STRING (Scanf.unescaped (String.sub s 1 (String.length s - 2))) }
 | eof
     { EOF }
