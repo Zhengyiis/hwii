@@ -1,229 +1,263 @@
-# Homework 7: Parsing
+# Homework 8: Optimizations
 
-In this homework, you'll implement a top-down predictive parser for an
-alternative syntax for our language. This syntax is called ML (Berkeley),
-because it bears a vague resemblance to ML-family languages like OCaml.
-We'll usually refer to it as MLB.
+In this homework, you'll implement some optimizations in your compiler. You'll
+also come up with benchmark programs and see how well your optimizations do on a
+collaboratively-developed benchmark suite.
 
-Here's an example of an MLB program:
+You'll implement at least _two_ of the following optimizations (all of which we
+discussed in class):
 
-```
-function add_up(a, b, c) =
-  a + b = c
+- Constant propagation
+- Inlining
+- Common subexpression elimination
 
-let x = 
-  if 
-    add_up(read_num(), read_num(), read_num())
-  then 1
-  else 2 
-in
-print(x)
-```
+In order to make inlining and common subexpression elimination easier to
+implement, you'll also write an AST pass (i.e., a function of type `program ->
+program`) to make sure all variable names are globally unique.
 
-Unlike the previous assignments, **you won't be modifying either the interpreter
-or the compiler.** We've provided an AST-based version of the HW6 compiler and
-interpreter as well as functions to produce the AST from s-expressions. You'll
-write a parser that produces the *same* AST but that instead reads in
-MLB-formatted source code.
+_Note:_ Task 1 (as defined below) will be due **1 WEEK BEFORE** the rest of the
+tasks. It has a separate assignment on Gradescope, `hw8-benchmarks`.
 
-Here's a grammar (like the ones we discussed in class) for MLB:
+_Note:_ There are no "subtasks" in this assignment. Each numbered section has
+exactly one task to go with it: Task 1, Task 2, Task 3a, Task 3b, and Task 3c.
 
-```
-<program> ::= <defns> <expr>
+### Grading
 
-<defns> ::=
-  | epsilon
-  | <defn> <defns>
+You have some options as far as how much time and effort to put into this final
+homework. For example:
 
-<defn> ::=
-  | FUNCTION ID LPAREN <params> EQ <expr>
+- If you're short on time and want to be done with the semester—perfectly
+  understandable!—we recommend implementing **constant propagation and
+  inlining**, skipping the optional extension to constant propagation.
+- If you feel like diving in a little deeper, implement constant propagation and
+  common subexpression elimination, including the optional extension to constant
+  propagation.
 
-<params> ::=
-  | RPAREN
-  | ID <rest-params>
+It's up to you!
 
-<rest-params> ::=
-  | RPAREN
-  | COMMA ID <rest-params>
+- You will receive full credit for correctly completing Task 1, Task 2, and
+  _just two_ of Task 3a, Task 3b, and Task 3c. In other words, for full credit,
+  you will only need to implement _two_ optimizations total.
+- You will receive an additional 10% (extra credit) if you correctly implement
+  the remaining third optimization (i.e., _all three_ of Task 3a, Task 3b, and
+  Task 3c).
 
-<expr> ::=
-  | IF <expr> THEN <expr> ELSE <expr>
-  | LET ID EQ <expr> IN <expr>
-  | <seq>
+But again, no pressure! **You can receive full credit by doing _just two_ of
+Task 3a, Task 3b, and Task 3c!**
 
-<seq> ::=
-  | <infix1> <rest-seq>
+No matter which of the optimizations you chose to implement, Task 1 and Task 2
+are both required.
 
-<rest-seq> ::=
-  | epsilon
-  | SEMICOLON <infix1> <rest-seq>
+### Starter code
 
-<infix1> ::=
-  | <infix2> <infix1'>
+The starter code is the same as for Homework 7, but without support for MLB
+syntax. In particular, lambda expressions and function pointers are not
+supported.
 
-<infix1'> ::=
-  | epsilon
-  | EQ <infix1>
-  | LT <infix1>
+You will write all your optimizations in the file `lib/optimize.ml`. **You will
+not need to modify any other files.**
 
-<infix2> ::=
-  | <term> <infix2'>
+### Testing
 
-<infix2'> ::=
-  | epsilon
-  | PLUS <infix2>
-  | MINUS <infix2>
+**There is no reference solution for this homework.** This is because everyone's
+optimizations will be slightly different!
 
-<term> ::=
-  | ID
-  | ID LPAREN <args>
-  | NUM
-  | LPAREN <expr> RPAREN
+That being said, we still encourage you to write tests using the `OUnit2`
+framework we used for Homework 1. For a refresher on how that works, check out
+Section 2 on the course website. In any case, we will *not*
+be grading any tests you write for this assignment _except for_ the benchmarks
+that you explicitly submit in Task 1.  It's up to you what kinds of tests you write!
 
-<args> ::=
-  | RPAREN
-  | <expr> <rest-args>
+### Running the optimizer and compiler
 
-<rest-args> ::=
-  | RPAREN
-  | COMMA <expr> <rest-args>
+You can run the compiler with specific optimization passes enabled using the
+`bin/compile.exe` executable, by passing the `-p` argument one or more
+times. For instance:
+
+```sh
+dune exec bin/compile.exe -- examples/ex1.lisp output -r -p propagate-constants -p uniquify-variables -p inline
 ```
 
-## Testing
+will execute the compiler with constant propagation, globally unique names, and
+inlining enabled. You can also use this to execute an optimization more than
+once—for instance, doing constant propagation, then inlining, then constant
+propagation again.
 
-### Tests will not be graded
+You can also pass `-o` instead to enable all optimizations.
 
-_Except for the specific example we require in Task 1.1, we will **NOT** be
-grading your tests for this homework._
+## 1. Benchmarks (due 1 week early)
 
-However, it will still be that case that when you submit your implementation to
-Gradescope (to the assignment `hw7`), your suite of examples in the `examples/`
-directory will be run against the reference interpreter and compiler. If the
-reference implementation fails on any of your examples, Gradescope will show you
-how its output differed from the expected output of your example (if you wrote a
-`.out` file for it).
+_**Note:** For full credit, you **must** complete this task._
 
-You can do this as many times as you want. We encourage you to use this option
-to develop a good set of examples *before* you start working on your parser!
+We've set up a
+[repository for benchmarks](https://github.com/berkeley-cs164-sp25/hw8-benchmarks)
+for this homework assignment, as well as a script that you can use to see how
+much your optimizations improve performance on the various benchmarks.
 
-### Support for `.mlb` files
+_Note:_ We will **not** be grading your optimizations based on a competition of
+any kind with the benchmarks submitted. Instead, we will just be grading your
+optimizations on the basis of whether or not they behave as prescribed (based
+on our own internal tests).
 
-We've extended the testing framework to support programs in the new syntax. You
-can write MLB-syntax examples either by:
+**Task 1 (DUE 1 WEEK EARLY):** In the Gradescope assignment `hw8-benchmarks`,
+upload _at least three_ interesting benchmark programs.  These must be programs that the Homework 8 starter code can actually run!  For instance, since the Homework 8 language doesn't include variadic functions or let expressions that bind multiple variables, your benchmarks should not use these features.
 
-- Putting `.mlb` files in the `examples` directory
-- Writing a _tab_-separated `examples/mlb-examples.tsv` file. This file is
-  tab-separated instead of comma-separated because, unlike our Lisp-like syntax,
-  MLB uses commas pretty extensively.
+We will periodically take some of these submissions from Gradescope and upload them to
+the *public* benchmarking repository, so please **DO NOT INCLUDE ANY IDENTIFYING
+INFORMATION IN YOUR BENCHMARKS** (e.g. name, email, date of birth, social
+security number, password...).
 
-Note that in general, the interpreter and the compiler will give the same result
-on all of your programs! You'll probably want to write `.out` files (or include
-expected output in the `.tsv` file) to make sure your parser is actually
-working. These work exactly the same as with `.lisp` files.
+This also means that if you're interested in testing your optimizations on 
+benchmarks contributed by others, you should periodically do a `git pull` on the
+`hw8-benchmarks` repo, to get the latest benchmark suite!  This is totally optional.
+Again, the grade for your optimizations will not have anything to do with the
+benchmarks submitted by your peers.  We have our own set of tests that we'll use
+to evaluate your optimizations.  But if you want access to benchmarks that your
+peers have created, just for your own purposes of assessing your optimizations,
+pulling from `hw8-benchmarks`is the way to get a whole suite!
 
-On this homework more than on previous ones, it may be useful to run your
-functions in an OCaml shell. You can do that by running `dune utop` from the
-`hw7` directory, then entering, for example:
+## 2. Globablly unique names
 
+_**Note:** For full credit, you **must** implement this pass._
+
+Many optimizations can benefit from a pass that ensures all names are globally
+unique.
+
+**Task 2:** Implement this pass using `gensym`.
+
+This pass should be run before inlining and common subexpression elimination,
+and both of those optimizations can then assume globally-unique names (this is
+an exception to the usual principle that the order of optimizations shouldn't
+matter for correctness). The `validate_passes` function in `optimize.ml` ensures
+that this optimization is executed before inlining and common subexpression
+elimination.
+
+_Hint:_ You should implement this optimization before implementing
+inlining or common subexpression elimination!
+
+## 3a. Constant propagation
+
+_**Note:** You can choose not to implement this optimization and still get full
+credit; in that case, you must implement both inlining and common subexpression
+elimination._
+
+Constant propagation is a crucial optimization in which as much computation as
+possible is done at _compile time_ instead of at _run time_.
+
+We implemented a sketch of a simple version of constant propagation in class.
+
+**Task 3a:** Implement constant propagation, which should support:
+
+- Replacing the primitive operations `add1`, `sub1`, `plus`, `minus`, `eq`, and
+  `lt` with their statically-determined result when possible;
+- Replacing `let`-bound names with constant boolean or number values when
+  possible;
+- Eliminating `if` expressions where the test expression's value can be
+  statically determined.
+
+**Optional extension (for no additional credit):** You can also implement
+re-associating binary operations (possibly in a separate pass) to find
+opportunities for constant propagation. For instance, consider the expression
+
+```scheme
+(+ 5 (+ 2 (read-num)))
 ```
-> open Mlb_syntax;;
-> parse "1 + 3";;
+
+This expression won't be modified by the constant propagation algorithm
+described above, but with re-association it could be optimized to
+
+```scheme
+(+ 7 (read-num))
 ```
 
-## 1. Writing an MLB program (1 subtask)
+## 3b. Inlining
 
-To start, complete the following task to familiarize yourself with the MLB
-syntax. _Note that this task WILL be graded!_
+_**Note:** You can choose not to implement this optimization and still get full
+credit; in that case, you must implement both constant propagation and common
+subexpression elimination._
 
-**Task 1.1:** In the file `examples/task1.mlb`, write a valid program in the MLB
-syntax that defines a `sort` function that sorts a list of integers.
+In this task, you will implement function inlining for function definitions.
 
-_Hint:_ Recall that we represent lists as nested `pair`s with a `nil` at the
-end. For example, the list `[1, 2]` would be written as `pair(1, pair(2, nil))`
-in the MLB syntax.
+In general, inlining functions can be tricky because of variable names; consider
+the following code:
 
-_Hint:_ It may be helpful to define a `sorted_insert` helper function that takes
-in an integer `n` and a sorted list `xs` and returns `xs` with `n` inserted into
-it at a location that maintains the sorted order.
+```scheme
+(define (f x y) (+ x y))
 
-## 2. Parsing MLB syntax (1 subtask)
-
-Now that you are familiar with MLB syntax, it's time to write a parser for the
-language!
-
-We provide you with a tokenizer in `mlb_syntax/tokenizer.ml`; it should not be
-necessary to change it, but you are free to do so if you wish. Instead, you'll
-be working on the parser in the file `mlb_syntax/parser.ml`.
-
-The AST you'll produce is defined in `ast/ast.ml`; it's quite similar to the AST
-we defined in class. A few hints for mapping the MLB grammar to the AST:
-
-- The `<seq>` non-terminal should correspond to `Do` if and only if you end up
-  parsing more than one semicolon-separated expression.
-- The `<infix1>` and `<infix2>` non-terminals can produce `Eq`, `Lt`, `Plus`,
-  and `Minus` primitive calls.
-- The first `ID` case in the `<term>` non-terminal should produce `True` on the
-  identifier `true`, `False` on the identifier `false`, `Nil` on the identifier
-  `nil`, and `Var id` on other identifiers.
-- The second `ID` case in the `<term>` non-terminal should produce either `Call`
-  or a primitive. You can use the provided `call_or_prim` function to decide
-  which one to produce.
-
-**Task 2.1:** In the file `mlb_syntax/parser.ml`, finish the implementation of
-the `parse` function by implementing `parse_defns` and `parse_expr`, which parse
-MLB definitions and expressions respectively.
-
-_Hint:_ We recommend writing a top-down parser like the ones we developed in
-class:
-
-- Write one function per non-terminal (with the exception of primed cases---for
-  instance, you can handle `infix1'` inside the function for `infix1`).
-- Return a value (usually, but not always, an expression) and a list of tokens
-  from each function.
-- Decide which production rule to use by examining the front of the token list.
-
-You may wish to review `handparser.ml` and `handparser2.ml` from class, along
-with the class sessions covering how they work.  Make sure you remember how
-you're using the returned token list!
-
-_Hint:_ The MLB grammar does not have any left-recursion or left-ambiguity
-except for in `<term>`, where you can handle the two `ID` cases with careful
-pattern matching.
-
-_Hint_: You shouldn't need to change the top-level `parse_program` function, but
-you'll need to fill in the bodies of `parse_defns` and `parse_expr` and add
-additional non-terminal parsing functions.
-
-_Hint:_ We've provided one other helper function: `consume_token`. This function
-checks to see that the head of a token list is what you want it to be, returning
-the tail of the list if it is and raising an error otherwise.
-
-## Extra credit: associativity (1 extra credit subtask worth 10%)
-
-With the grammar specified above, the MLB expression
-`2 + 3 + 4`
-will parse to something like (in s-expression syntax)
-`(+ 2 (+ 3 4)`.
-
-This is a little different from what we'd usually expect: addition is generally
-defined to left-associative. Most languages parse that same expression to
-`(+ (+ 2 3) 4)`.
-
-For addition, this doesn't really matter---since it's associative, those
-expressions evaluate to the same thing. This can lead to weird behavior on
-subtraction, though. The expression
+(let ((x 2))
+  (let ((y 3))
+    (f y x)))
 ```
-10 - 3 - 2
+
+A naive inlining implementation might result in code like this:
+
+```scheme
+(let ((x 2))
+  (let ((y 3))
+    (let ((x y))
+      (let ((y x))
+        (+ x y)))))
 ```
-should probably evaluate to `5`, but if you implement the grammar as specified
-above it will instead evaluate to `9` (i.e., `10 - (3 - 2)`).
 
-**Extra Credit Task:** If you finish your parser early, try to fix this!
-Specifically, modify your parser so that `+` and `-` associate to the left.
+This expression, however, is not equivalent!
 
-_Hint:_ There's more than one way to achieve this! One way to get started would
-be to take a look at the `<seq>` and `<rest-seq>` non-terminals, which are used
-to get a list of expressions. Could you do something similar to get a list of
-terms, then transform the list into an AST of the correct shape?
+This problem can be solved by adding a simultaneous binding form like the one
+you implemented in Homework 3. _It can also be solved by just ensuring that all
+variable and parameter names are globally unique._
 
-_This task is worth 10% additional credit on this homework assignment._
+You should implement a heuristic for when to inline a given function. This
+heuristic should involve both (1) the number of static call sites and (2) the
+size of the function body. For example, you could multiply some measure of the
+size of the function body by the number of call sites and see if this exceeds
+some target threshold. We recommend implementing your inliner as follows:
+
+1. Find a function to inline. This function should satisfy your heuristics and
+   be a *leaf* function, i.e., one that doesn't contain any function calls.
+2. Inline the function, and remove the function's definition.
+3. Go back to Step 1. Now that you've inlined a function, more functions may now
+   be leaf functions.
+
+This process will never inline recursive functions, including mutually-recursive
+functions.
+
+**Task 3b:** Implement function inlining for function definitions. Please
+describe your heuristic in a comment at the **VERY TOP** of the
+`optimizations.ml` file.
+
+## 3c. Common subexpression elimination
+
+_**Note:** You can choose not to implement this optimization and still get full
+credit; in that case, you must implement both constant propagation and
+inlining._
+
+In this task, you will implement common subexpression elimination.
+
+This optimization pass should find common subexpressions, add names for those
+subexpressions, and replace the subexpressions with variable references.
+
+This optimization is more challenging to implement than inlining is. Our
+suggested approach is to:
+
+- Optimize each definition (including the top-level program body) independently.
+  For each definition:
+  - Make a list of *all* of the subexpressions in the program that don't include
+    calls to `(read-num)` or `(print)`
+  - Find any such subexpressions that occur more than once
+  - Pick a new variable name for each expression that occurs more than once
+  - Replace each subexpression with this variable name
+  - Add a let-binding for each common subexpression
+
+The most difficult part of this process is determining where to put the new
+let-binding. Consider replacing the (identical) subexpressions `e1`, `e2`, and
+`e3` with the variable `x`. You'll need to find the lowest common ancestor `e`
+of `e1`, `e2`, and `e3`, then replace it with
+
+```scheme
+(let ((x e1)) e)
+```
+
+In order to find this lowest common ancestor, it will likely be useful to track
+the "path" to a given expression: how to get to that subexpressson from the top
+level of the given definition. How exactly you do this is up to you.
+
+**Task 3c:** Implement common subexpression elimination.

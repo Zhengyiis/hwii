@@ -1,5 +1,6 @@
 open Util
 open Shared
+open Error
 open Directive
 open Ast
 
@@ -178,8 +179,8 @@ let align n alignment =
   if n mod alignment = 0 then n else n + (alignment - (n mod alignment))
 
 (** [compile_expr e] produces X86-64 instructions for the expression [e] *)
-let rec compile_expr (defns : defn list) (tab : symtab) (stack_index : int) :
-    expr -> directive list = function
+let rec compile_expr (defns : defn list) (tab : symtab) (stack_index : int)
+    (is_tail : bool) : expr -> directive list = function
   | Num x ->
       [Mov (Reg Rax, operand_of_num x)]
   | True ->
@@ -189,28 +190,53 @@ let rec compile_expr (defns : defn list) (tab : symtab) (stack_index : int) :
   | Var var when Symtab.mem var tab ->
       [Mov (Reg Rax, stack_address (Symtab.find var tab))]
   | Var _ as e ->
-      raise (Error.Stuck (s_exp_of_expr e))
+      raise (Stuck (s_exp_of_expr e))
   | Nil ->
       [Mov (Reg Rax, operand_of_nil)]
   | If (test_expr, then_expr, else_expr) ->
       let then_label = gensym "then" in
       let else_label = gensym "else" in
       let continue_label = gensym "continue" in
-      compile_expr defns tab stack_index test_expr
+      compile_expr defns tab stack_index false test_expr
       @ [Cmp (Reg Rax, operand_of_bool false); Je else_label]
       @ [Label then_label]
-      @ compile_expr defns tab stack_index then_expr
+      @ compile_expr defns tab stack_index is_tail then_expr
       @ [Jmp continue_label] @ [Label else_label]
-      @ compile_expr defns tab stack_index else_expr
+      @ compile_expr defns tab stack_index is_tail else_expr
       @ [Label continue_label]
   | Let (var, exp, body) ->
-      compile_expr defns tab stack_index exp
+      compile_expr defns tab stack_index false exp
       @ [Mov (stack_address stack_index, Reg Rax)]
       @ compile_expr defns
           (Symtab.add var stack_index tab)
-          (stack_index - 8) body
+          (stack_index - 8) is_tail body
   | Do exps ->
-      List.concat_map (compile_expr defns tab stack_index) exps
+      List.concat
+        (List.mapi
+           (fun i exp ->
+             compile_expr defns tab stack_index
+               (if i = List.length exps - 1 then is_tail else false)
+               exp)
+           exps)
+  | Call (f, args) as e when is_defn defns f && is_tail ->
+      let defn = get_defn defns f in
+      if List.length args = List.length defn.args then
+        let compiled_args =
+          args
+          |> List.mapi (fun i arg ->
+                 compile_expr defns tab (stack_index - (8 * i)) false arg
+                 @ [Mov (stack_address (stack_index - (8 * i)), Reg Rax)])
+          |> List.concat
+        in
+        let moved_args =
+          args
+          |> List.mapi (fun i _ ->
+                 [ Mov (Reg R8, stack_address (stack_index - (8 * i)))
+                 ; Mov (stack_address ((i + 1) * -8), Reg R8) ])
+          |> List.concat
+        in
+        compiled_args @ moved_args @ [Jmp (function_label f)]
+      else raise (Stuck (s_exp_of_expr e))
   | Call (f, args) as e when is_defn defns f ->
       let stack_base = align_stack_index (stack_index + 8) in
       let defn = get_defn defns f in
@@ -218,7 +244,7 @@ let rec compile_expr (defns : defn list) (tab : symtab) (stack_index : int) :
         let compiled_args =
           args
           |> List.mapi (fun i arg ->
-                 compile_expr defns tab (stack_base - ((i + 2) * 8)) arg
+                 compile_expr defns tab (stack_base - ((i + 2) * 8)) false arg
                  @ [Mov (stack_address (stack_base - ((i + 2) * 8)), Reg Rax)])
           |> List.concat
         in
@@ -226,18 +252,18 @@ let rec compile_expr (defns : defn list) (tab : symtab) (stack_index : int) :
         @ [ Add (Reg Rsp, Imm stack_base)
           ; Call (function_label f)
           ; Sub (Reg Rsp, Imm stack_base) ]
-      else raise (Error.Stuck (s_exp_of_expr e))
+      else raise (Stuck (s_exp_of_expr e))
   | Call _ as e ->
-      raise (Error.Stuck (s_exp_of_expr e))
+    raise (Stuck (s_exp_of_expr e))
   | Prim0 f as exp ->
       compile_0ary_primitive stack_index exp f
   | Prim1 (f, arg) as exp ->
-      compile_expr defns tab stack_index arg
+      compile_expr defns tab stack_index false arg
       @ compile_unary_primitive stack_index exp f
   | Prim2 (f, arg1, arg2) as exp ->
-      compile_expr defns tab stack_index arg1
+      compile_expr defns tab stack_index false arg1
       @ [Mov (stack_address stack_index, Reg Rax)]
-      @ compile_expr defns tab (stack_index - 8) arg2
+      @ compile_expr defns tab (stack_index - 8) false arg2
       @ compile_binary_primitive stack_index exp f
 
 (** [compile_defn defns defn] produces X86-64 instructions for the function
@@ -247,7 +273,7 @@ let compile_defn (defns : defn list) defn : directive list =
     defn.args |> List.mapi (fun i arg -> (arg, (i + 1) * -8)) |> Symtab.of_list
   in
   [Label (function_label defn.name)]
-  @ compile_expr defns ftab ((List.length defn.args + 1) * -8) defn.body
+  @ compile_expr defns ftab ((List.length defn.args + 1) * -8) true defn.body
   @ [Ret]
 
 (** [compile] produces X86-64 instructions, including frontmatter, for the
@@ -261,5 +287,5 @@ let compile (prog : program) =
   ; Section "text" ]
   @ List.concat_map (compile_defn prog.defns) prog.defns
   @ [Label "lisp_entry"]
-  @ compile_expr prog.defns Symtab.empty (-8) prog.body
+  @ compile_expr prog.defns Symtab.empty (-8) true prog.body
   @ [Ret]

@@ -1,6 +1,7 @@
 open Printf
 open Util
 open Shared
+open Error
 open Ast
 
 (** a [value]  is the runtime value of an expression *)
@@ -98,7 +99,7 @@ let rec interp_expr (defns : defn list) (env : environment) : expr -> value =
     | Some value ->
         value
     | None ->
-        raise (Error.Stuck (s_exp_of_expr e)) )
+        raise (Stuck (s_exp_of_expr e)) )
   | Nil ->
       Nil
   | Let (var, exp, body) ->
@@ -119,21 +120,21 @@ let rec interp_expr (defns : defn list) (env : environment) : expr -> value =
           |> List.combine defn.args |> Symtab.of_list
         in
         interp_expr defns fenv defn.body
-      else raise (Error.Stuck (s_exp_of_expr e))
+      else raise (Stuck (s_exp_of_expr e))
   | Call _ as e ->
-      raise (Error.Stuck (s_exp_of_expr e))
+      raise (Stuck (s_exp_of_expr e))
   | Prim0 f as e -> (
     match interp_0ary_primitive f with
     | Some v ->
         v
     | None ->
-        raise (Error.Stuck (s_exp_of_expr e)))
+        raise (Stuck (s_exp_of_expr e)) )
   | Prim1 (f, arg) as e -> (
     match interp_unary_primitive f (interp_expr defns env arg) with
     | Some v ->
         v
     | None ->
-        raise (Error.Stuck (s_exp_of_expr e)) )
+        raise (Stuck (s_exp_of_expr e)) )
   | Prim2 (f, arg1, arg2) as e -> (
     match
       let v1 = interp_expr defns env arg1 in
@@ -143,7 +144,7 @@ let rec interp_expr (defns : defn list) (env : environment) : expr -> value =
     | Some v ->
         v
     | None ->
-        raise (Error.Stuck (s_exp_of_expr e)) )
+        raise (Stuck (s_exp_of_expr e)) )
   | True ->
       Bool true
   | False ->
