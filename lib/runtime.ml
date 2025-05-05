@@ -1,1 +1,2 @@
-let runtime = [%blob "runtime.o"]
+let runtime =
+  [%blob "runtime.o"]

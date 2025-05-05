@@ -102,11 +102,12 @@ module Make (I : Infra.T) : T = struct
   exception AsmTimeout
 
   let diff is_mlb name program input expected =
+    Printf.printf "Running %s\n" name;
     let ast =
       try
         Ok
           (if is_mlb then I.parse Infra.Mlb program
-          else I.parse Infra.Lisp program)
+           else I.parse Infra.Lisp program)
       with e -> Error (Printexc.to_string e)
     in
     let try_bind f arg =
@@ -245,7 +246,7 @@ module Make (I : Infra.T) : T = struct
     |> List.concat
 
   let file_results =
-    (try Sys.readdir "../examples" with _ ->  Array.make 0 "")
+    (try Sys.readdir "../examples" with _ -> Array.make 0 "")
     |> Array.to_list
     |> List.filter (fun file ->
            Filename.check_suffix file ".lisp"

@@ -1,5 +1,10 @@
+a.out
+program
+program.s
+*.o
 _build
 runtime/*.o
 .merlin
 /output/
-hw8-benchmarks
+.DS_Store
+.vscode/settings.json

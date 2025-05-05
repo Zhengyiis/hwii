@@ -1,26 +1,18 @@
-#include <stdio.h>
 #include <inttypes.h>
+#include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <fcntl.h>
 
+#define num_mask 0b11
+#define num_tag 0b00
+#define num_shift 2
 
-
-extern uint64_t lisp_entry(void *heap);
-
-#define num_mask   0b11
-#define num_tag    0b00
-#define num_shift  2
-
-#define bool_mask  0b1111111
-#define bool_tag   0b0011111
+#define bool_mask 0b1111111
+#define bool_tag 0b0011111
 #define bool_shift 7
 
 #define heap_mask 0b111
 #define pair_tag 0b010
-
-#define nil_tag 0b11111111
+#define heap_shift 3
 
 void print_value(uint64_t value) {
   if ((value & num_mask) == num_tag) {
@@ -29,8 +21,7 @@ void print_value(uint64_t value) {
   } else if ((value & bool_mask) == bool_tag) {
     if (value >> bool_shift) {
       printf("true");
-    }
-    else {
+    } else {
       printf("false");
     }
   } else if ((value & heap_mask) == pair_tag) {
@@ -41,22 +32,14 @@ void print_value(uint64_t value) {
     printf(" ");
     print_value(v2);
     printf(")");
-  } else if (value == nil_tag) {
-    printf("()");
   } else {
     printf("BAD VALUE: %" PRIu64, value);
   }
 }
 
-void lisp_error(char *exp) {
-  printf("Stuck[%s]", exp);
+void lisp_error() {
+  printf("ERROR");
   exit(1);
-}
-
-int main(int argc, char **argv) {
-  void *heap = malloc(4096);
-  lisp_entry(heap);
-  return 0;
 }
 
 uint64_t read_num() {
@@ -65,6 +48,12 @@ uint64_t read_num() {
   return (uint64_t)(r) << num_shift;
 }
 
-void print_newline() {
-  printf("\n");
+void print_newline() { printf("\n"); }
+
+extern uint64_t lisp_entry(void *heap);
+
+int main(int argc, char **argv) {
+  void *heap = (void *)malloc(4096);
+  lisp_entry(heap);
+  return 0;
 }

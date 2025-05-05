@@ -1,3 +1,5 @@
 (lang dune 2.7)
-(name hw8)
+
+(name compiler)
+
 (using menhir 2.1)

@@ -4,9 +4,11 @@
   exception Error of string
 }
 
+let comment = ';' [^ '\n'] * ('\n' | eof)
 
 rule token = parse
-| [' ' '\t' '\n'] (* also ignore newlines, not only whitespace and tabs *)
+| comment { token lexbuf }
+| [' ' '\t' '\n' ] (* also ignore newlines, not only whitespace and tabs *)
     { token lexbuf }
 | '('
     { LPAREN }
