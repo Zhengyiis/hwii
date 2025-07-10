@@ -1,0 +1,17 @@
+# Compiled object files
+*.o
+src/*.o
+
+# Executables
+snake
+interactive-snake
+unit-tests
+custom-tests
+
+# Test output files
+unit-test-*.snk
+tests/*-out.snk
+
+# Temporary files
+*.tmp
+/tmp/
