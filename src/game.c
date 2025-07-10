@@ -23,8 +23,85 @@ static void update_head(game_t *game, unsigned int snum);
 
 /* Task 1 */
 game_t *create_default_game() {
-  // TODO: Implement this function.
-  return NULL;
+  // Allocate memory for the game struct
+  game_t *game = malloc(sizeof(game_t));
+  if (game == NULL) {
+    return NULL;
+  }
+
+  // Set board dimensions
+  game->num_rows = 18;
+  
+  // Allocate memory for the board (array of row pointers)
+  game->board = malloc(game->num_rows * sizeof(char*));
+  if (game->board == NULL) {
+    free(game);
+    return NULL;
+  }
+
+  // Allocate memory for each row (20 chars + '\n' + '\0' = 22 bytes)
+  for (unsigned int i = 0; i < game->num_rows; i++) {
+    game->board[i] = malloc(22 * sizeof(char));
+    if (game->board[i] == NULL) {
+      // Cleanup previously allocated rows
+      for (unsigned int j = 0; j < i; j++) {
+        free(game->board[j]);
+      }
+      free(game->board);
+      free(game);
+      return NULL;
+    }
+  }
+
+  // Initialize the board
+  for (unsigned int row = 0; row < game->num_rows; row++) {
+    for (unsigned int col = 0; col < 20; col++) {
+      if (row == 0 || col == 0 || row == game->num_rows - 1 || col == 19) {
+        // Border
+        game->board[row][col] = '#';
+      } else if (row == 2 && col == 2) {
+        // Snake tail
+        game->board[row][col] = 'd';
+      } else if (row == 2 && col == 3) {
+        // Snake body
+        game->board[row][col] = '>';
+      } else if (row == 2 && col == 4) {
+        // Snake head
+        game->board[row][col] = 'D';
+      } else if (row == 2 && col == 9) {
+        // Fruit
+        game->board[row][col] = '*';
+      } else {
+        // Empty space
+        game->board[row][col] = ' ';
+      }
+    }
+    // Add newline and null terminator
+    game->board[row][20] = '\n';
+    game->board[row][21] = '\0';
+  }
+
+  // Initialize snake
+  game->num_snakes = 1;
+  game->snakes = malloc(sizeof(snake_t));
+  if (game->snakes == NULL) {
+    // Cleanup board
+    for (unsigned int i = 0; i < game->num_rows; i++) {
+      free(game->board[i]);
+    }
+    free(game->board);
+    free(game);
+    return NULL;
+  }
+
+  // Set snake properties
+  game->snakes[0].tail_row = 2;
+  game->snakes[0].tail_col = 2;
+  game->snakes[0].head_row = 2;
+  game->snakes[0].head_col = 4;
+  game->snakes[0].live = true;
+
+  return game;
 }
 
 /* Task 2 */

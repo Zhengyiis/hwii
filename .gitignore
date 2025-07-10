@@ -1,0 +1,16 @@
+# Compiled object files
+*.o
+src/*.o
+
+# Executables
+unit-tests
+custom-tests
+snake
+interactive-snake
+
+# Test output files
+unit-test-*.snk
+tests/*-out.snk
+
+# Other build artifacts
+*.exe
