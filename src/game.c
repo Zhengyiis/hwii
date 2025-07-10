@@ -23,8 +23,85 @@ static void update_head(game_t *game, unsigned int snum);
 
 /* Task 1 */
 game_t *create_default_game() {
-  // TODO: Implement this function.
-  return NULL;
+  // Allocate memory for the game struct
+  game_t *game = malloc(sizeof(game_t));
+  if (game == NULL) {
+    return NULL;
+  }
+  
+  // Initialize game properties
+  game->num_rows = 18;
+  game->num_snakes = 1;
+  
+  // Allocate memory for the board (array of char pointers)
+  game->board = malloc(18 * sizeof(char *));
+  if (game->board == NULL) {
+    free(game);
+    return NULL;
+  }
+  
+  // Allocate memory for each row (20 chars + newline + null terminator = 22 chars)
+  for (unsigned int row = 0; row < 18; row++) {
+    game->board[row] = malloc(22 * sizeof(char));
+    if (game->board[row] == NULL) {
+      // Free previously allocated rows
+      for (unsigned int i = 0; i < row; i++) {
+        free(game->board[i]);
+      }
+      free(game->board);
+      free(game);
+      return NULL;
+    }
+  }
+  
+  // Initialize the board
+  for (unsigned int row = 0; row < 18; row++) {
+    for (unsigned int col = 0; col < 20; col++) {
+      if (row == 0 || row == 17 || col == 0 || col == 19) {
+        // Walls on the border
+        game->board[row][col] = '#';
+      } else if (row == 2 && col == 2) {
+        // Snake tail
+        game->board[row][col] = 'd';
+      } else if (row == 2 && col == 3) {
+        // Snake body
+        game->board[row][col] = '>';
+      } else if (row == 2 && col == 4) {
+        // Snake head
+        game->board[row][col] = 'D';
+      } else if (row == 2 && col == 9) {
+        // Fruit
+        game->board[row][col] = '*';
+      } else {
+        // Empty space
+        game->board[row][col] = ' ';
+      }
+    }
+    // Add newline and null terminator
+    game->board[row][20] = '\n';
+    game->board[row][21] = '\0';
+  }
+  
+  // Allocate and initialize snakes array
+  game->snakes = malloc(1 * sizeof(snake_t));
+  if (game->snakes == NULL) {
+    // Free all previously allocated memory
+    for (unsigned int i = 0; i < 18; i++) {
+      free(game->board[i]);
+    }
+    free(game->board);
+    free(game);
+    return NULL;
+  }
+  
+  // Initialize the snake
+  game->snakes[0].tail_row = 2;
+  game->snakes[0].tail_col = 2;
+  game->snakes[0].head_row = 2;
+  game->snakes[0].head_col = 4;
+  game->snakes[0].live = true;
+  
+  return game;
 }
 
 /* Task 2 */
