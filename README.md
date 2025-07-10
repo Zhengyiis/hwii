@@ -1,30 +1,6 @@
-# Class Compiler
+# 61C Project 1: snek
+Due: July 9, 2025 23:59
 
-This is the compiler that we built in lecture.
-I will keep it up to date as we move through the course.
+Spec: https://cs61c.org/su25/projects/proj1/
 
-Changes won't necessarily be purely additive, so 
-you may want to look at the commit history 
-if you want a point-in-time snapshot.
-
-## Unofficial Install Guide
-
-For [utop history](https://github.com/ocaml-community/utop/issues/478): `mkdir -r ~/.local/state`
-
-## How to run
-
-```sh
-# to run the tests
-dune runtest -f
-
-# to run the interpreter...
-# on a string
-dune exec bin/interp.exe -- -e "(add1 5)"
-# or on a file
-dune exec bin/interp.exe examples/unary-nums.lisp 
-
-
-# to run the compiler
-# it puts the executable and assembly in directory "output/"
-dune exec bin/compile.exe examples/unary-nums.lisp output/
-```
+Ed Main Thread: https://edstem.org/us/courses/80131/discussion/6796337

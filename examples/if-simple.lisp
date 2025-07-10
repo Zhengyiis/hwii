@@ -1,1 +1,0 @@
-(print (if false 1 (if true 4 3)))

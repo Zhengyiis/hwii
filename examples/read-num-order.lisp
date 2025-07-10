@@ -1,1 +1,0 @@
-(print (- (read-num) (read-num)))
